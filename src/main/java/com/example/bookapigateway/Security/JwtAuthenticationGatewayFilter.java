@@ -13,14 +13,28 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Service
 public class JwtAuthenticationGatewayFilter implements GlobalFilter {
 
     @Value("${jwt.secret-key}")
     private String secretKey;
+    private static final List<String> WHITELIST = List.of(
+            "/public",
+            "/actuator/health",
+            "/swagger-ui",
+            "/swagger-ui.html",
+            "/v1"
+    );
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+
+        if (isWhitelisted(path)) {
+            return chain.filter(exchange);
+        }
         // 1) Extract Authorization header
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
@@ -54,6 +68,16 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
+    }
+    private boolean isWhitelisted(String path) {
+        // A quick way is to check if path starts with or matches a pattern
+        // For more advanced matching, use Spring's AntPathMatcher
+        for (String w : WHITELIST) {
+            if (path.startsWith(w)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
